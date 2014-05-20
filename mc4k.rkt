@@ -125,18 +125,13 @@
 
 ; create the world map
 (define (generate-map)
-  (define blkmap (make-gl-uint-vector (* MAPDIM MAPDIM MAPDIM)))
-  (for* ([x MAPDIM] [y MAPDIM] [z MAPDIM])
+  (for*/vector #:length (* MAPDIM MAPDIM MAPDIM) ([x MAPDIM] [y MAPDIM] [z MAPDIM])
     (define yd (* (- y 32.5) 0.4))
     (define zd (* (- z 32.5) 0.4))
     (if (or (> (random) (- (sqrt (sqrt (+ (* yd yd) (* zd zd)))) 0.8))
             (< (random) 0.6))
-        (gl-vector-set! blkmap (mapindex x y z) 0) ; there won't be a block here
-        (gl-vector-set! blkmap 
-                        (mapindex x y z)
-                        (inexact->exact 
-                         (floor (* (random) #x00FFFFFF))))))
-  blkmap)
+        0
+        (random #x00FFFFFF))))
 
 (define cl 0.0) ; use instead of a clock for now
 
@@ -192,7 +187,7 @@
         
         (let loop ()
           (when (< dist closest)
-            (define tex (gl-vector-ref blkmap (mapindexf xp yp zp)))
+            (define tex (vector-ref blkmap (mapindexf xp yp zp)))
             (when (> tex 0)
               (set! col tex)
               (set! ddist (- 255.0 (floor (* (/ dist 32.0) 255.0))))

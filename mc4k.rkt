@@ -16,8 +16,8 @@
 ; graphics environment manager canvas class
 (define gem-canvas%
   (class* canvas% ()
-    (inherit with-gl-context swap-gl-buffers)
-    (init-field frame-buf width height scale)
+    (inherit get-parent with-gl-context swap-gl-buffers)
+    (init-field frame-buf width height scale)    
     
     (define/override (on-paint)
       (with-gl-context
@@ -34,41 +34,47 @@
          (glViewport 0 0 width height))))
     
     (define/override (on-char key)
-      (when (equal? (send key get-key-code) #\q)
-        (exit)))
+      (send (get-parent) on-char key))
     
-    (super-instantiate () (style '(gl)))))
+    (super-new 
+     [style      '(gl)]
+     [min-width  width]
+     [min-height height])))
 
 
 ; graphics environment manager class
 (define gem%
-  (class object%
+  (class frame%
     (super-new)
-    (init-field width height scale title)
-    (field
-     ; frame-buf is width by height pixels, with 4 bytes per pixel
-     (frame-buf (make-gl-ubyte-vector (* width height 4)))
-     (win (new frame% 
-               [label title] 
-               [min-width (* width scale)]
-               [min-height (* height scale)]))
-     (gl (new gem-canvas% 
-              [parent win] 
-              [frame-buf frame-buf] 
-              [width width] 
-              [height height] 
-              [scale scale])))
+    (init width height scale)
+    (inherit show)
     
+    (define frame-buf (make-gl-ubyte-vector (* width height 4)))
+    
+    (define gl (new gem-canvas% 
+                    [parent    this]
+                    [frame-buf frame-buf]
+                    [width     width]
+                    [height    height]
+                    [scale     scale]))
+    
+    (define exit? #f)
+    
+    (define/public (on-char key)
+      (when (equal? (send key get-key-code) #\q)
+        (set! exit? #t)
+        (show #f)))
     
     ; repeatedly display frames until user quits
     (define/public (run renderer private-renderer-data)
       (define (run-loop)
-        (renderer private-renderer-data frame-buf)
-        (send gl on-paint)
-        (queue-callback run-loop #f))
-      (send win show #t)
+        (unless exit?
+          (time
+           (renderer private-renderer-data frame-buf)
+           (send gl on-paint)
+           (queue-callback run-loop #f))))
+      (show #t)
       (run-loop))))
-
 
 ; the block world map is stored in a cube of side mapdim; each map entry
 ; determines the colour of the corresponding block
@@ -103,7 +109,7 @@
   (* (+ (* WIDTH (- HEIGHT y 1)) x) 4))
 
 ; set pixel at (x,y) in given gl-ubyte-vector 'buf' to given colour
-(define (set-pixel-rgb buf x y r g b)
+(define (set-pixel-rgb! buf x y r g b)
   (let ([index (framebufindex x y)])
     (gl-vector-set! buf index r)
     (gl-vector-set! buf (+ index 1) g)
@@ -210,7 +216,7 @@
                    (floor 
                     (/ (* (bitwise-and col #xFF) br ddist)
                        (* 255.0 255))))) 
-        (set-pixel-rgb frame-buf x y r g b)))))
+        (set-pixel-rgb! frame-buf x y r g b)))))
 
 
 (define (main)
@@ -219,7 +225,7 @@
                        [width  WIDTH] 
                        [height HEIGHT] 
                        [scale  SCALE] 
-                       [title  "mc4k - press q to exit"])])
+                       [label  "mc4k - press q to exit"])])
     (send graphics run render-blocks blkmap)))
 
 ;(main)

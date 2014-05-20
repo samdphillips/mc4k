@@ -120,19 +120,16 @@
 ; create the world map
 (define (generate-map)
   (define blkmap (make-gl-uint-vector (* MAPDIM MAPDIM MAPDIM)))
-  (for ([x MAPDIM])
-    (for ([y MAPDIM])
-      (for ([z MAPDIM])
-        (let
-            ((yd (* (- y 32.5) 0.4))
-             (zd (* (- z 32.5) 0.4)))
-          (if (or (> (random) (- (sqrt (sqrt (+ (* yd yd) (* zd zd)))) 0.8))
-                  (< (random) 0.6))
-              (gl-vector-set! blkmap (mapindex x y z) 0) ; there won't be a block here
-              (gl-vector-set! blkmap 
-                              (mapindex x y z)
-                              (inexact->exact 
-                               (floor (* (random) #x00FFFFFF)))))))))
+  (for* ([x MAPDIM] [y MAPDIM] [z MAPDIM])
+    (define yd (* (- y 32.5) 0.4))
+    (define zd (* (- z 32.5) 0.4))
+    (if (or (> (random) (- (sqrt (sqrt (+ (* yd yd) (* zd zd)))) 0.8))
+            (< (random) 0.6))
+        (gl-vector-set! blkmap (mapindex x y z) 0) ; there won't be a block here
+        (gl-vector-set! blkmap 
+                        (mapindex x y z)
+                        (inexact->exact 
+                         (floor (* (random) #x00FFFFFF))))))
   blkmap)
 
 (define cl 0.0) ; use instead of a clock for now
@@ -219,10 +216,10 @@
 (define (main)
   (let ([blkmap (generate-map)]
         [graphics (new gem% 
-                       [width WIDTH] 
+                       [width  WIDTH] 
                        [height HEIGHT] 
-                       [scale SCALE] 
-                       [title "mc4k - press q to exit"])])
+                       [scale  SCALE] 
+                       [title  "mc4k - press q to exit"])])
     (send graphics run render-blocks blkmap)))
 
 ;(main)

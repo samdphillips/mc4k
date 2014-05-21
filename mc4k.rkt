@@ -9,54 +9,53 @@
 ; This code is public domain - use at your own risk
 
 
-(require sgl/gl
-         sgl/gl-vectors)
-
-
 ; graphics environment manager canvas class
 (define gem-canvas%
-  (class* canvas% ()
-    (inherit get-parent with-gl-context swap-gl-buffers)
-    (init-field frame-buf width height scale)    
-    
-    (define/override (on-paint)
-      (with-gl-context
-       (lambda ()
-         (glClearColor 0.0 0.0 0.0 0.0)
-         (glClear GL_COLOR_BUFFER_BIT)
-         (glPixelZoom scale scale)
-         (glDrawPixels width height GL_RGBA GL_UNSIGNED_BYTE frame-buf)
-         (swap-gl-buffers))))
-    
-    (define/override (on-size width height)
-      (with-gl-context
-       (lambda ()
-         (glViewport 0 0 width height))))
+  (class canvas%
+    (inherit get-parent
+             get-dc
+             suspend-flush
+             resume-flush)
+    (init-field frame-buf width height)
     
     (define/override (on-char key)
       (send (get-parent) on-char key))
     
-    (super-new 
-     [style      '(gl)]
+    (super-new
      [min-width  width]
-     [min-height height])))
+     [min-height height])
+
+    (define bitmap
+      (make-object bitmap% width height))
+
+    (define dc (get-dc))
+    
+    (define/override (on-paint)
+      (send bitmap
+            set-argb-pixels
+            0 0 width height
+            frame-buf)
+      
+      (suspend-flush)
+      (send dc clear)
+      (send dc draw-bitmap bitmap 0 0)
+      (resume-flush))))
 
 
 ; graphics environment manager class
 (define gem%
   (class frame%
     (super-new)
-    (init width height scale)
+    (init width height)
     (inherit show)
     
-    (define frame-buf (make-gl-ubyte-vector (* width height 4)))
+    (define frame-buf (make-bytes (* width height 4) 0))
     
     (define gl (new gem-canvas% 
                     [parent    this]
                     [frame-buf frame-buf]
                     [width     width]
-                    [height    height]
-                    [scale     scale]))
+                    [height    height]))
     
     (define exit? #f)
     
@@ -105,23 +104,14 @@
 ; return frame buffer index of pixel at given co-ordinates
 ; (0, 0) is top left
 (define (framebufindex x y)
-  ; the OpenGL frame buffer origin is at bottom left
-  (* (+ (* WIDTH (- HEIGHT y 1)) x) 4))
+  (* (+ (* WIDTH y) x) 4))
 
 ; set pixel at (x,y) in given gl-ubyte-vector 'buf' to given colour
 (define (set-pixel-rgb! buf x y r g b)
   (let ([index (framebufindex x y)])
-    (gl-vector-set! buf index r)
-    (gl-vector-set! buf (+ index 1) g)
-    (gl-vector-set! buf (+ index 2) b)
-    (gl-vector-set! buf (+ index 3) #xFF)))
-
-(define (set-pixel-col buf x y col)
-  (let ([index (framebufindex x y)])
-    (gl-vector-set! buf index (arithmetic-shift col -16))
-    (gl-vector-set! buf (+ index 1) (arithmetic-shift col -8))
-    (gl-vector-set! buf (+ index 2) col)
-    (gl-vector-set! buf (+ index 3) #xFF)))
+    (for ([i (in-range index (+ index 4))]
+          [c (in-list (list #xFF r g b))])
+      (bytes-set! buf i c))))
 
 ; create the world map
 (define (generate-map)
@@ -144,9 +134,9 @@
   (set! cl (+ cl 0.01))
   
   (for ([x WIDTH])
-    (define rotzd (/ (- (exact->inexact x) (/ WIDTH 2)) HEIGHT))
+    (define rotzd (/ (- x (/ WIDTH 2.0)) HEIGHT))
     (for ([y HEIGHT])
-      (define rotyd (/ (- (exact->inexact y) (/ HEIGHT 2)) HEIGHT))
+      (define rotyd (/ (- y (/ HEIGHT 2.0)) HEIGHT))
       (define rotxd 1.0)
       (define col 0)
       (define br 255)
@@ -218,8 +208,7 @@
   (let ([blkmap (generate-map)]
         [graphics (new gem% 
                        [width  WIDTH] 
-                       [height HEIGHT] 
-                       [scale  SCALE] 
+                       [height HEIGHT]
                        [label  "mc4k - press q to exit"])])
     (send graphics run render-blocks blkmap)))
 
